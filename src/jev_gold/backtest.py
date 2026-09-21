@@ -65,6 +65,10 @@ EVENTS: list[dict[str, str]] = [
      "note": "FOMC hold + SEP"},
     {"id": "fomc_2026_06", "date": "2026-06-17", "kind": "fomc",
      "note": "FOMC hold + SEP"},
+    {"id": "fomc_2026_07", "date": "2026-07-29", "kind": "fomc",
+     "note": "FOMC hold, 3 dissenters wanted +25bp"},
+    {"id": "fomc_2026_09", "date": "2026-09-16", "kind": "fomc",
+     "note": "FOMC +25bp to 3.75-4.00%, first hike since 2023"},
 ]
 
 

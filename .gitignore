@@ -5,3 +5,8 @@ __pycache__/
 *.egg-info/
 reports/
 .cache/
+
+# 本地计划/进度管理文件（planning-with-files），不进公开仓库
+task_plan.md
+progress.md
+findings.md

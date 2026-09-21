@@ -15,7 +15,7 @@ STUDY = ROOT / "reports" / "event_study.json"
 
 
 class PublishedStudyTests(unittest.TestCase):
-    def test_twenty_real_jev_windows_with_sane_fomc(self):
+    def test_all_real_jev_windows_with_sane_fomc(self):
         self.assertTrue(STUDY.exists(), "run python -m jev_gold.backtest first")
         rows = json.loads(STUDY.read_text())
         by_id = {r["id"]: r for r in rows}
