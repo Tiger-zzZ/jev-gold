@@ -1,0 +1,16 @@
+[project]
+name = "jev-gold"
+version = "0.1.0"
+description = "Jev (TypeSafe System One) as the sole decision core for gold paper trading — a calibration-first PoC"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.32",
+    "yfinance>=0.2.40",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
