@@ -56,6 +56,37 @@ QUESTIONS: dict[str, dict[str, Any]] = {
 }
 
 
+# v2 评测问题集（2026-09-21 起，与标签严格对齐的方向预测题；v1 契约保留不删）。
+# 标签口径：未来 N 个交易日的 GLD 收益，±1% 以内算 flat。
+QUESTIONS_V2: dict[str, dict[str, Any]] = {
+    "fwd_5d_direction": {
+        "type": "choice",
+        "instructions": (
+            "Based only on the provided state, predict the direction of GLD "
+            "over the NEXT 5 trading days."
+        ),
+        "criteria": {
+            "up": "GLD total return over the next 5 trading days is above +1%",
+            "down": "GLD total return over the next 5 trading days is below -1%",
+            "flat": "GLD stays within +/-1% over the next 5 trading days",
+        },
+    },
+    "fwd_1d_direction": {
+        "type": "choice",
+        "instructions": (
+            "Based only on the provided state, predict the direction of GLD "
+            "over the NEXT 1 trading day."
+        ),
+        "criteria": {
+            "up": "GLD return on the next trading day is above +1%",
+            "down": "GLD return on the next trading day is below -1%",
+            "flat": "GLD stays within +/-1% on the next trading day",
+        },
+    },
+    "geopolitical_risk": QUESTIONS["geopolitical_risk"],
+}
+
+
 @dataclass
 class JudgeResult:
     raw: dict[str, Any]
@@ -77,6 +108,34 @@ class MockJudge:
     """确定性占位判断器：同一 state 永远给出同一结果，便于回放与测试。"""
 
     name = "mock"
+
+    def ask(self, state: dict[str, Any], questions: dict[str, dict[str, Any]]) -> dict[str, Any]:
+        """通用版：按问题类型生成确定性假答案（含 v2 评测题）。"""
+        seed = int.from_bytes(
+            hashlib.sha256(
+                json.dumps({"s": state, "q": sorted(questions)}, sort_keys=True, default=str).encode()
+            ).digest()[:8],
+            "big",
+        )
+        rng = random.Random(seed)
+        answers: dict[str, Any] = {}
+        for name, q in questions.items():
+            if q["type"] == "score":
+                n = len(q.get("criteria") or q.get("legend") or [0])
+                answers[name] = {
+                    "score": rng.randint(0, max(n - 1, 0)),
+                    "confidence": round(rng.uniform(0.5, 0.99), 4),
+                }
+            elif q["type"] == "choice":
+                keys = list(q["criteria"])
+                raw = [rng.random() for _ in keys]
+                total = sum(raw)
+                probs = {k: round(p / total, 4) for k, p in zip(keys, raw)}
+                pick = max(probs, key=probs.get)
+                answers[name] = {"choice": pick, "probabilities": probs, "confidence": probs[pick]}
+            else:  # noul
+                answers[name] = {"noul": round(rng.random(), 4)}
+        return answers
 
     def evaluate(self, state: dict[str, Any]) -> JudgeResult:
         seed = int.from_bytes(
@@ -145,12 +204,13 @@ class JevJudge:
         self.base_url = (base_url or "https://ai-gateway.vercel.sh").rstrip("/")
         self.model = model
 
-    def evaluate(self, state: dict[str, Any]) -> JudgeResult:
+    def ask(self, state: dict[str, Any], questions: dict[str, dict[str, Any]]) -> dict[str, Any]:
+        """通用版：任意问题集 → 原始 answers 字典（v2 评测用）。"""
         url = f"{self.base_url}/typesafe/v1/systemone"
         body = {
             "model": self.model,
             "state": state,
-            "questions": _to_api_questions(QUESTIONS),
+            "questions": _to_api_questions(questions),
         }
         last_exc: Exception | None = None
         for attempt in range(3):
@@ -166,11 +226,14 @@ class JevJudge:
                 )
                 if resp.status_code >= 400:
                     raise RuntimeError(f"Jev HTTP {resp.status_code}: {resp.text[:800]}")
-                return self._parse(resp.json())
+                return resp.json()["answers"]
             except (requests.RequestException, RuntimeError) as exc:
                 last_exc = exc
                 time.sleep(1.5 * (attempt + 1))
         raise RuntimeError(f"Jev call failed after retries: {last_exc}") from last_exc
+
+    def evaluate(self, state: dict[str, Any]) -> JudgeResult:
+        return self._parse({"answers": self.ask(state, QUESTIONS)})
 
     @staticmethod
     def _parse(payload: dict[str, Any]) -> JudgeResult:
